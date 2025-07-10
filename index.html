@@ -5,29 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Scanner to Google Sheet</title>
     <style>
-        body { font-family: sans-serif; text-align: center; margin-top: 50px; }
-        #qr-reader { width: 500px; max-width: 90%; margin: 20px auto; border: 1px solid #ccc; }
-        #result, #loading, #error { margin-top: 20px; font-size: 1.2em; }
-        #loading { display: none; color: blue; }
-        #result { color: green; }
-        #error { color: red; }
-        input, button { padding: 10px; font-size: 1em; margin: 5px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; text-align: center; margin: 20px; background-color: #f4f4f9; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #444; }
+        p { color: #666; }
+        #qr-reader { width: 100%; max-width: 500px; margin: 20px auto; border: 1px solid #ccc; border-radius: 8px; overflow: hidden; }
+        #result, #loading, #error { margin-top: 15px; font-size: 1.1em; font-weight: bold; min-height: 25px; }
+        #loading { display: none; color: #007bff; }
+        #result { color: #28a745; }
+        #error { color: #dc3545; }
+        input[type="url"] { width: 95%; padding: 12px; font-size: 1em; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background-color: #007bff; color: white; padding: 12px 20px; font-size: 1em; border: none; border-radius: 4px; cursor: pointer; transition: background-color 0.3s; }
+        button:hover { background-color: #0056b3; }
     </style>
 </head>
 <body>
 
-    <h1>สแกน QR Code ส่งเข้า Google Sheet</h1>
+    <div class="container">
+        <h1>สแกน QR Code ส่งเข้า Google Sheet</h1>
+        <p>วางลิงก์ Web App URL ที่ได้จาก Google Apps Script:</p>
+        <input type="url" id="appsScriptUrl" placeholder="วางลิงก์ Web App URL ที่นี่">
+        <br>
+        <button id="startScanBtn">กดเพื่อเริ่มสแกน</button>
 
-    <p>วางลิงก์ Web App URL ที่ได้จาก Google Apps Script:</p>
-    <input type="url" id="appsScriptUrl" placeholder="วางลิงก์ Web App URL ที่นี่" size="50">
-    <br>
-    <button id="startScanBtn">กดเพื่อเริ่มสแกน</button>
+        <div id="qr-reader" style="display: none;"></div>
 
-    <div id="qr-reader"></div>
-
-    <div id="loading">กำลังส่งข้อมูล...</div>
-    <div id="result"></div>
-    <div id="error"></div>
+        <div id="loading"></div>
+        <div id="result"></div>
+        <div id="error"></div>
+    </div>
 
     <script src="https://unpkg.com/html5-qrcode/html5-qrcode.min.js"></script>
 
@@ -37,85 +43,40 @@
         const resultDiv = document.getElementById('result');
         const errorDiv = document.getElementById('error');
         const loadingDiv = document.getElementById('loading');
+        const qrReaderDiv = document.getElementById('qr-reader');
         const qrReaderDivId = "qr-reader";
 
         let html5QrCode;
 
-        // ฟังก์ชันเมื่อสแกนสำเร็จ
+        // ฟังก์ชันเมื่อสแกนสำเร็จ (เวอร์ชันสแกนต่อเนื่อง)
         async function onScanSuccess(decodedText, decodedResult) {
-            console.log(`Scan result: ${decodedText}`);
-            
-            // หยุดการสแกน
-            html5QrCode.stop().then(() => {
-                console.log("QR Code scanning stopped.");
-                document.getElementById(qrReaderDivId).style.display = 'none';
-            }).catch(err => {
-                console.error("Failed to stop scanning.", err);
-            });
-
-            // แสดงสถานะกำลังส่ง
-            loadingDiv.style.display = 'block';
-            resultDiv.innerText = '';
-            errorDiv.innerText = '';
-
-            const webAppUrl = appsScriptUrlInput.value;
-            if (!webAppUrl) {
-                errorDiv.innerText = "กรุณาใส่ Web App URL ก่อนครับ";
-                loadingDiv.style.display = 'none';
+            // ถ้ากำลังส่งข้อมูลอยู่ ให้ข้ามการสแกนซ้ำไปก่อน
+            if (loadingDiv.style.display === 'block') {
                 return;
             }
 
-            // ส่งข้อมูลไปที่ Google Apps Script
+            console.log(`Scan result: ${decodedText}`);
+
+            // แสดงผลว่าสแกนเจออะไร และกำลังส่งข้อมูล
+            resultDiv.innerText = '';
+            errorDiv.innerText = '';
+            loadingDiv.innerText = `กำลังส่ง: ${decodedText}`;
+            loadingDiv.style.display = 'block';
+
+            const webAppUrl = appsScriptUrlInput.value;
+
             try {
-                const response = await fetch(webAppUrl, {
+                // ส่งข้อมูลไปที่ Google Apps Script
+                await fetch(webAppUrl, {
                     method: 'POST',
-                    mode: 'no-cors', //  สำคัญ: ใช้ no-cors เพราะ Apps Script ไม่ได้ตั้งค่า CORS
+                    mode: 'no-cors',
                     cache: 'no-cache',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ qrData: decodedText })
                 });
 
-                loadingDiv.style.display = 'none';
-                resultDiv.innerText = `ส่งข้อมูล "${decodedText}" สำเร็จ!`;
+                // เมื่อส่งสำเร็จ:
+                loadingDiv.style.display = 'none'; // ซ่อนข้อความ "กำลังส่ง"
+                resultDiv.innerText = `✅ ส่งข้อมูล "${decodedText}" สำเร็จ!`;
 
-            } catch (error) {
-                loadingDiv.style.display = 'none';
-                errorDiv.innerText = `เกิดข้อผิดพลาดในการส่งข้อมูล: ${error}`;
-            }
-        }
-
-        // ฟังก์ชันเมื่อสแกนไม่สำเร็จ
-        function onScanFailure(error) {
-            // console.warn(`QR error = ${error}`);
-        }
-
-        // เมื่อกดปุ่มเริ่มสแกน
-        startScanBtn.addEventListener('click', () => {
-            if (!appsScriptUrlInput.value) {
-                alert("กรุณาใส่ Web App URL ก่อนครับ");
-                return;
-            }
-            
-            resultDiv.innerText = '';
-            errorDiv.innerText = '';
-            document.getElementById(qrReaderDivId).style.display = 'block';
-
-            html5QrCode = new Html5Qrcode(qrReaderDivId);
-            html5QrCode.start(
-                { facingMode: "environment" }, // ใช้กล้องหลัง
-                {
-                    fps: 10,
-                    qrbox: { width: 250, height: 250 } 
-                },
-                onScanSuccess,
-                onScanFailure
-            ).catch(err => {
-                errorDiv.innerText = `ไม่สามารถเปิดกล้องได้: ${err}`;
-            });
-        });
-    </script>
-
-</body>
-</html>
+                // หน่วงเวลา 2 วินาที
