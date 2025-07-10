@@ -2,8 +2,8 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QR Scanner to Google Sheet</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>QR Scanner</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -15,59 +15,47 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            -webkit-tap-highlight-color: transparent; /* ป้องกันแสงกระพริบตอนกดบน iOS */
         }
 
         .container {
-            max-width: 90%;
-            width: 400px;
+            max-width: 95%;
+            width: 480px;
             background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             margin: 20px;
+            box-sizing: border-box;
         }
 
         h1 {
-            color: #444;
-            margin-bottom: 15px;
-        }
-
-        p {
-            color: #666;
-            margin-bottom: 10px;
+            color: #333;
+            margin-top: 0;
+            margin-bottom: 20px;
         }
 
         #qr-reader {
             width: 100%;
-            max-width: 100%;
-            margin: 15px auto;
             border-radius: 8px;
             overflow: hidden;
+            border: 1px solid #eee;
         }
 
-        #qr-reader video {
-            display: block;
-            width: 100%;
-            height: auto;
-        }
-
-        #result,
-        #loading,
-        #error {
-            margin-top: 15px;
+        .status-message {
+            margin-top: 20px;
             font-weight: bold;
-            min-height: 25px;
+            min-height: 50px; /* จองพื้นที่ไว้ลดการกระโดดของ Layout */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
         }
         
         #result {
             color: #28a745;
-            font-size: 1.5em; 
-        }
-
-        #loading {
-            display: none;
-            color: #007bff;
-            font-size: 1.2em;
+            font-size: 1.6em; 
+            word-break: break-all;
         }
 
         #error {
@@ -75,28 +63,24 @@
             font-size: 1.2em;
         }
 
-        input#appsScriptUrl {
-            width: calc(100% - 24px);
-            padding: 12px;
-            font-size: 1em;
-            margin-bottom: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-
         button {
             color: white;
-            padding: 12px 20px;
-            font-size: 1em;
+            padding: 15px 20px;
+            font-size: 1.1em;
+            font-weight: bold;
             border: none;
-            border-radius: 4px;
+            border-radius: 8px;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: background-color 0.3s, transform 0.1s;
             width: 100%;
             margin-top: 10px;
+            box-sizing: border-box;
         }
         
+        button:active {
+            transform: scale(0.98); /* ทำให้ปุ่มดูเหมือนถูกกด */
+        }
+
         button#startScanBtn {
             background-color: #007bff;
         }
@@ -105,9 +89,8 @@
             background-color: #0056b3;
         }
 
-        /* === ส่วนที่เพิ่ม: สไตล์ปุ่มยกเลิก === */
         button#stopScanBtn {
-            background-color: #6c757d; /* สีเทา */
+            background-color: #6c757d;
         }
 
         button#stopScanBtn:hover {
@@ -118,19 +101,17 @@
 <body>
 
     <div class="container">
-        <h1>สแกน QR Code ส่งเข้า Google Sheet</h1>
-        <p>วางลิงก์ Web App URL ที่ได้จาก Google Apps Script:</p>
-        <input type="url" id="appsScriptUrl" placeholder="วางลิงก์ Web App URL ที่นี่">
-        <br>
-        <button id="startScanBtn">กดเพื่อเริ่มสแกน</button>
+        <div id="mainScreen">
+            <h1>QR Code Scanner</h1>
+            <button id="startScanBtn">กดเพื่อเริ่มสแกน</button>
+        </div>
 
-        <div id="qr-reader" style="display: none;"></div>
-        
-        <button id="stopScanBtn" style="display: none;">ยกเลิกการสแกน</button>
-
-        <div id="loading"></div>
-        <div id="result"></div>
-        <div id="error"></div>
+        <div id="scanScreen" style="display: none;">
+            <div id="qr-reader"></div>
+            <div id="result" class="status-message"></div>
+            <div id="error" class="status-message"></div>
+            <button id="stopScanBtn">ยกเลิก</button>
+        </div>
     </div>
 
     <audio id="scanSound" preload="auto" playsinline>
@@ -140,29 +121,32 @@
     <script src="https://unpkg.com/html5-qrcode/html5-qrcode.min.js"></script>
 
     <script>
+        // === ส่วนที่แก้ไข: ใส่ URL ของคุณที่นี่ ===
+        const webAppUrl = 'https://script.google.com/macros/s/AKfycbyxkdYVQFZc9rARHqu2HnscmZM5uXYuqnaKqrF8AH103UCKr9DsvskUg7v6dNPUD30aZQ/exec';
+
+        const mainScreen = document.getElementById('mainScreen');
+        const scanScreen = document.getElementById('scanScreen');
         const startScanBtn = document.getElementById('startScanBtn');
-        const stopScanBtn = document.getElementById('stopScanBtn'); // === เพิ่ม ===
-        const appsScriptUrlInput = document.getElementById('appsScriptUrl');
+        const stopScanBtn = document.getElementById('stopScanBtn');
         const resultDiv = document.getElementById('result');
         const errorDiv = document.getElementById('error');
-        const qrReaderDiv = document.getElementById('qr-reader');
-        const loadingDiv = document.getElementById('loading');
         const qrReaderDivId = "qr-reader";
         const sound = document.getElementById('scanSound');
 
         let html5QrCode;
+        let isProcessing = false;
 
         async function onScanSuccess(decodedText, decodedResult) {
-            if (loadingDiv.style.display === 'block') return;
+            if (isProcessing) return;
             
+            isProcessing = true;
             console.log(`Scan result: ${decodedText}`);
-            resultDiv.innerText = '';
-            errorDiv.innerText = '';
-            loadingDiv.innerText = `กำลังส่ง...`;
-            loadingDiv.style.display = 'block';
+            
+            if (sound) sound.play();
+            
+            resultDiv.innerHTML = `✅<br>${decodedText}`;
             
             try {
-                const webAppUrl = appsScriptUrlInput.value;
                 await fetch(webAppUrl, {
                     method: 'POST',
                     mode: 'no-cors',
@@ -171,49 +155,37 @@
                     body: JSON.stringify({ qrData: decodedText })
                 });
 
-                loadingDiv.style.display = 'none';
-                resultDiv.innerText = `✅ ${decodedText}`;
-                
-                if (sound) sound.play();
-
                 setTimeout(() => {
-                    resultDiv.innerText = '';
-                }, 1000); 
+                    resultDiv.innerHTML = '';
+                    isProcessing = false;
+                }, 1200); // ลดเวลาให้เร็วขึ้นอีก
 
             } catch (error) {
-                loadingDiv.style.display = 'none';
-                errorDiv.innerText = `❌ เกิดข้อผิดพลาด`;
+                errorDiv.innerText = `❌ เกิดข้อผิดพลาดในการส่งข้อมูล`;
                 setTimeout(() => {
                     errorDiv.innerText = '';
+                    isProcessing = false;
                 }, 3000);
             }
         }
 
         function onScanFailure(error) { /* Do nothing */ }
 
-        function showMainScreen() {
-            qrReaderDiv.style.display = 'none';
-            stopScanBtn.style.display = 'none';
-            appsScriptUrlInput.style.display = 'block';
-            startScanBtn.style.display = 'block';
+        function showScreen(screenToShow) {
+            mainScreen.style.display = 'none';
+            scanScreen.style.display = 'none';
+            screenToShow.style.display = 'block';
         }
 
         startScanBtn.addEventListener('click', () => {
-            if (!appsScriptUrlInput.value) {
-                alert("กรุณาใส่ Web App URL ก่อนครับ");
-                return;
-            }
-
+            // ปลดล็อกเสียงสำหรับ iOS
             if (sound) {
-                sound.play().catch(e => console.error("Audio play failed:", e));
+                sound.play().catch(e => {});
                 sound.pause();
                 sound.currentTime = 0;
             }
             
-            startScanBtn.style.display = 'none';
-            appsScriptUrlInput.style.display = 'none';
-            qrReaderDiv.style.display = 'block';
-            stopScanBtn.style.display = 'block'; // === เพิ่ม ===
+            showScreen(scanScreen);
 
             html5QrCode = new Html5Qrcode(qrReaderDivId);
             html5QrCode.start(
@@ -222,23 +194,23 @@
                 onScanSuccess,
                 onScanFailure
             ).catch(err => {
-                errorDiv.innerText = `ไม่สามารถเปิดกล้องได้: ${err}`;
-                showMainScreen(); // กลับหน้าหลักถ้าเปิดกล้องไม่ได้
+                errorDiv.innerText = `ไม่สามารถเปิดกล้องได้`;
+                showScreen(mainScreen);
             });
         });
 
-        // === เพิ่ม: Event Listener สำหรับปุ่มยกเลิก ===
         stopScanBtn.addEventListener('click', () => {
+            isProcessing = false;
+            resultDiv.innerHTML = '';
+            errorDiv.innerText = '';
             if (html5QrCode && html5QrCode.isScanning) {
                 html5QrCode.stop().then(() => {
-                    console.log("Scanning stopped by user.");
-                    showMainScreen();
+                    showScreen(mainScreen);
                 }).catch(err => {
-                    console.error("Failed to stop scanner:", err);
-                    showMainScreen();
+                    showScreen(mainScreen);
                 });
             } else {
-                showMainScreen();
+                showScreen(mainScreen);
             }
         });
     </script>
