@@ -121,7 +121,6 @@
     <script src="https://unpkg.com/html5-qrcode/html5-qrcode.min.js"></script>
 
     <script>
-        // === ส่วนที่แก้ไข: ใส่ URL ของคุณที่นี่ ===
         const webAppUrl = 'https://script.google.com/macros/s/AKfycbyxkdYVQFZc9rARHqu2HnscmZM5uXYuqnaKqrF8AH103UCKr9DsvskUg7v6dNPUD30aZQ/exec';
 
         const mainScreen = document.getElementById('mainScreen');
@@ -147,20 +146,21 @@
             resultDiv.innerHTML = `✅<br>${decodedText}`;
             
             try {
-                await fetch(webAppUrl, {
+                // เราไม่รอให้ fetch เสร็จ แต่จะเริ่มจับเวลาเลย เพื่อให้ UI ตอบสนองเร็วขึ้น
+                fetch(webAppUrl, {
                     method: 'POST',
                     mode: 'no-cors',
-                    cache: 'no-cache',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ qrData: decodedText })
                 });
 
+                // === ส่วนที่แก้ไข: ลดเวลาหน่วงเหลือ 0.4 วินาที ===
                 setTimeout(() => {
                     resultDiv.innerHTML = '';
-                    isProcessing = false;
-                }, 1200); // ลดเวลาให้เร็วขึ้นอีก
+                    isProcessing = false; // พร้อมสแกนอันต่อไป
+                }, 400); 
 
             } catch (error) {
+                // การจัดการ error ยังคงเหมือนเดิม
                 errorDiv.innerText = `❌ เกิดข้อผิดพลาดในการส่งข้อมูล`;
                 setTimeout(() => {
                     errorDiv.innerText = '';
@@ -178,7 +178,6 @@
         }
 
         startScanBtn.addEventListener('click', () => {
-            // ปลดล็อกเสียงสำหรับ iOS
             if (sound) {
                 sound.play().catch(e => {});
                 sound.pause();
