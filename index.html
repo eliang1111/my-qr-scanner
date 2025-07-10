@@ -55,22 +55,24 @@
         #loading,
         #error {
             margin-top: 15px;
-            font-size: 1.1em;
             font-weight: bold;
             min-height: 25px;
+        }
+        
+        #result {
+            color: #28a745;
+            font-size: 1.5em; 
         }
 
         #loading {
             display: none;
             color: #007bff;
-        }
-
-        #result {
-            color: #28a745;
+            font-size: 1.2em;
         }
 
         #error {
             color: #dc3545;
+            font-size: 1.2em;
         }
 
         input#appsScriptUrl {
@@ -83,8 +85,7 @@
             box-sizing: border-box;
         }
 
-        button#startScanBtn {
-            background-color: #007bff;
+        button {
             color: white;
             padding: 12px 20px;
             font-size: 1em;
@@ -95,9 +96,22 @@
             width: 100%;
             margin-top: 10px;
         }
+        
+        button#startScanBtn {
+            background-color: #007bff;
+        }
 
         button#startScanBtn:hover {
             background-color: #0056b3;
+        }
+
+        /* === ส่วนที่เพิ่ม: สไตล์ปุ่มยกเลิก === */
+        button#stopScanBtn {
+            background-color: #6c757d; /* สีเทา */
+        }
+
+        button#stopScanBtn:hover {
+            background-color: #5a6268;
         }
     </style>
 </head>
@@ -111,40 +125,44 @@
         <button id="startScanBtn">กดเพื่อเริ่มสแกน</button>
 
         <div id="qr-reader" style="display: none;"></div>
+        
+        <button id="stopScanBtn" style="display: none;">ยกเลิกการสแกน</button>
 
         <div id="loading"></div>
         <div id="result"></div>
         <div id="error"></div>
     </div>
 
-    <audio id="scanSound" preload="auto">
-        <source src="https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3" type="audio/mpeg">
+    <audio id="scanSound" preload="auto" playsinline>
+        <source src="https://firebasestorage.googleapis.com/v0/b/glide-prod.appspot.com/o/audio%2Fblip.mp3?alt=media&token=869b2323-c27a-422c-a502-12625995b217" type="audio/mpeg">
     </audio>
 
     <script src="https://unpkg.com/html5-qrcode/html5-qrcode.min.js"></script>
 
     <script>
         const startScanBtn = document.getElementById('startScanBtn');
+        const stopScanBtn = document.getElementById('stopScanBtn'); // === เพิ่ม ===
         const appsScriptUrlInput = document.getElementById('appsScriptUrl');
         const resultDiv = document.getElementById('result');
         const errorDiv = document.getElementById('error');
         const qrReaderDiv = document.getElementById('qr-reader');
         const loadingDiv = document.getElementById('loading');
         const qrReaderDivId = "qr-reader";
+        const sound = document.getElementById('scanSound');
 
         let html5QrCode;
 
         async function onScanSuccess(decodedText, decodedResult) {
-            if (loadingDiv.style.display === 'block') {
-                return;
-            }
+            if (loadingDiv.style.display === 'block') return;
+            
             console.log(`Scan result: ${decodedText}`);
             resultDiv.innerText = '';
             errorDiv.innerText = '';
-            loadingDiv.innerText = `กำลังส่ง: ${decodedText}`;
+            loadingDiv.innerText = `กำลังส่ง...`;
             loadingDiv.style.display = 'block';
-            const webAppUrl = appsScriptUrlInput.value;
+            
             try {
+                const webAppUrl = appsScriptUrlInput.value;
                 await fetch(webAppUrl, {
                     method: 'POST',
                     mode: 'no-cors',
@@ -152,29 +170,32 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ qrData: decodedText })
                 });
+
                 loadingDiv.style.display = 'none';
-                resultDiv.innerText = `? ส่งข้อมูล "${decodedText}" สำเร็จ!`;
+                resultDiv.innerText = `✅ ${decodedText}`;
                 
-                // เล่นเสียงเตือน
-                const sound = document.getElementById('scanSound');
-                if (sound) {
-                    sound.play();
-                }
+                if (sound) sound.play();
 
                 setTimeout(() => {
                     resultDiv.innerText = '';
-                }, 2000);
+                }, 1000); 
+
             } catch (error) {
                 loadingDiv.style.display = 'none';
-                errorDiv.innerText = `? เกิดข้อผิดพลาดในการส่งข้อมูล`;
+                errorDiv.innerText = `❌ เกิดข้อผิดพลาด`;
                 setTimeout(() => {
                     errorDiv.innerText = '';
                 }, 3000);
             }
         }
 
-        function onScanFailure(error) {
-            // console.warn(`QR error = ${error}`);
+        function onScanFailure(error) { /* Do nothing */ }
+
+        function showMainScreen() {
+            qrReaderDiv.style.display = 'none';
+            stopScanBtn.style.display = 'none';
+            appsScriptUrlInput.style.display = 'block';
+            startScanBtn.style.display = 'block';
         }
 
         startScanBtn.addEventListener('click', () => {
@@ -182,30 +203,43 @@
                 alert("กรุณาใส่ Web App URL ก่อนครับ");
                 return;
             }
+
+            if (sound) {
+                sound.play().catch(e => console.error("Audio play failed:", e));
+                sound.pause();
+                sound.currentTime = 0;
+            }
             
             startScanBtn.style.display = 'none';
             appsScriptUrlInput.style.display = 'none';
             qrReaderDiv.style.display = 'block';
+            stopScanBtn.style.display = 'block'; // === เพิ่ม ===
 
             html5QrCode = new Html5Qrcode(qrReaderDivId);
             html5QrCode.start(
                 { facingMode: "environment" },
-                {
-                    fps: 10,
-                    qrbox: (viewfinderWidth, viewfinderHeight) => {
-                        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                        const qrboxSize = Math.floor(minEdge * 0.7);
-                        return { width: qrboxSize, height: qrboxSize };
-                    }
-                },
+                { fps: 10, qrbox: { width: 250, height: 250 } },
                 onScanSuccess,
                 onScanFailure
             ).catch(err => {
                 errorDiv.innerText = `ไม่สามารถเปิดกล้องได้: ${err}`;
-                qrReaderDiv.style.display = 'none';
-                startScanBtn.style.display = 'block';
-                appsScriptUrlInput.style.display = 'block';
+                showMainScreen(); // กลับหน้าหลักถ้าเปิดกล้องไม่ได้
             });
+        });
+
+        // === เพิ่ม: Event Listener สำหรับปุ่มยกเลิก ===
+        stopScanBtn.addEventListener('click', () => {
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().then(() => {
+                    console.log("Scanning stopped by user.");
+                    showMainScreen();
+                }).catch(err => {
+                    console.error("Failed to stop scanner:", err);
+                    showMainScreen();
+                });
+            } else {
+                showMainScreen();
+            }
         });
     </script>
 
