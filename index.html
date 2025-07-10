@@ -42,31 +42,23 @@
         const appsScriptUrlInput = document.getElementById('appsScriptUrl');
         const resultDiv = document.getElementById('result');
         const errorDiv = document.getElementById('error');
-        const loadingDiv = document.getElementById('loading');
         const qrReaderDiv = document.getElementById('qr-reader');
+        const loadingDiv = document.getElementById('loading');
         const qrReaderDivId = "qr-reader";
 
         let html5QrCode;
 
-        // ฟังก์ชันเมื่อสแกนสำเร็จ (เวอร์ชันสแกนต่อเนื่อง)
         async function onScanSuccess(decodedText, decodedResult) {
-            // ถ้ากำลังส่งข้อมูลอยู่ ให้ข้ามการสแกนซ้ำไปก่อน
             if (loadingDiv.style.display === 'block') {
                 return;
             }
-
             console.log(`Scan result: ${decodedText}`);
-
-            // แสดงผลว่าสแกนเจออะไร และกำลังส่งข้อมูล
             resultDiv.innerText = '';
             errorDiv.innerText = '';
             loadingDiv.innerText = `กำลังส่ง: ${decodedText}`;
             loadingDiv.style.display = 'block';
-
             const webAppUrl = appsScriptUrlInput.value;
-
             try {
-                // ส่งข้อมูลไปที่ Google Apps Script
                 await fetch(webAppUrl, {
                     method: 'POST',
                     mode: 'no-cors',
@@ -74,9 +66,56 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ qrData: decodedText })
                 });
-
-                // เมื่อส่งสำเร็จ:
-                loadingDiv.style.display = 'none'; // ซ่อนข้อความ "กำลังส่ง"
+                loadingDiv.style.display = 'none';
                 resultDiv.innerText = `✅ ส่งข้อมูล "${decodedText}" สำเร็จ!`;
+                setTimeout(() => {
+                    resultDiv.innerText = '';
+                }, 2000);
+            } catch (error) {
+                loadingDiv.style.display = 'none';
+                errorDiv.innerText = `❌ เกิดข้อผิดพลาดในการส่งข้อมูล`;
+                setTimeout(() => {
+                    errorDiv.innerText = '';
+                }, 3000);
+            }
+        }
 
-                // หน่วงเวลา 2 วินาที
+        function onScanFailure(error) {
+            // console.warn(`QR error = ${error}`);
+        }
+
+        startScanBtn.addEventListener('click', () => {
+            if (!appsScriptUrlInput.value) {
+                alert("กรุณาใส่ Web App URL ก่อนครับ");
+                return;
+            }
+            
+            startScanBtn.style.display = 'none';
+            appsScriptUrlInput.style.display = 'none';
+            qrReaderDiv.style.display = 'block';
+
+            html5QrCode = new Html5Qrcode(qrReaderDivId);
+            html5QrCode.start(
+                { facingMode: "environment" },
+                {
+                    fps: 10,
+                    qrbox: (viewfinderWidth, viewfinderHeight) => {
+                        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                        const qrboxSize = Math.floor(minEdge * 0.7);
+                        return { width: qrboxSize, height: qrboxSize };
+                    }
+                },
+                onScanSuccess,
+                onScanFailure
+            ).catch(err => {
+                errorDiv.innerText = `ไม่สามารถเปิดกล้องได้: ${err}`;
+                qrReaderDiv.style.display = 'none';
+                // แสดงปุ่มและช่องกรอกอีกครั้งถ้าเปิดกล้องไม่ได้
+                startScanBtn.style.display = 'block';
+                appsScriptUrlInput.style.display = 'block';
+            });
+        });
+    </script>
+
+</body>
+</html>
