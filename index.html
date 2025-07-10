@@ -113,14 +113,16 @@
             <button id="stopScanBtn">ยกเลิก</button>
         </div>
     </div>
+    
+    <audio id="scanSound" preload="auto">
+        <source src="https://github.com/eliang1111/my-qr-scanner/raw/refs/heads/main/scanner-beep.mp3" type="audio/mpeg">
+    </audio>
 
-    <!-- ไม่ต้องใช้แท็ก <audio> อีกต่อไป -->
 
     <script src="https://unpkg.com/html5-qrcode/html5-qrcode.min.js"></script>
 
     <script>
         const webAppUrl = 'https://script.google.com/macros/s/AKfycbyxkdYVQFZc9rARHqu2HnscmZM5uXYuqnaKqrF8AH103UCKr9DsvskUg7v6dNPUD30aZQ/exec';
-        const soundUrl = 'https://firebasestorage.googleapis.com/v0/b/glide-prod.appspot.com/o/audio%2Fblip.mp3?alt=media&token=869b2323-c27a-422c-a502-12625995b217';
 
         const mainScreen = document.getElementById('mainScreen');
         const scanScreen = document.getElementById('scanScreen');
@@ -129,36 +131,10 @@
         const resultDiv = document.getElementById('result');
         const errorDiv = document.getElementById('error');
         const qrReaderDivId = "qr-reader";
+        const sound = document.getElementById('scanSound'); 
 
         let html5QrCode;
         let isProcessing = false;
-
-        // === ส่วนที่แก้ไข: การจัดการเสียงด้วย Web Audio API ===
-        let audioContext;
-        let audioBuffer;
-
-        function initAudio() {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                fetch(soundUrl)
-                    .then(response => response.arrayBuffer())
-                    .then(data => audioContext.decodeAudioData(data))
-                    .then(buffer => {
-                        audioBuffer = buffer;
-                    })
-                    .catch(e => console.error("Error with decoding audio data", e));
-            }
-        }
-
-        function playSound() {
-            if (!audioContext || !audioBuffer) return;
-            const source = audioContext.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(audioContext.destination);
-            source.start(0);
-        }
-        // === สิ้นสุดส่วนแก้ไขเสียง ===
-
 
         async function onScanSuccess(decodedText, decodedResult) {
             if (isProcessing) return;
@@ -166,7 +142,10 @@
             isProcessing = true;
             console.log(`Scan result: ${decodedText}`);
             
-            playSound(); // เรียกใช้ฟังก์ชันเล่นเสียงใหม่
+            if (sound) {
+                sound.currentTime = 0;
+                sound.play();
+            }
             
             resultDiv.innerHTML = `✅<br>${decodedText}`;
             
@@ -177,7 +156,6 @@
                     body: JSON.stringify({ qrData: decodedText })
                 });
 
-                // === ส่วนที่แก้ไข: ปรับเวลาหน่วงเป็น 0.8 วินาที ===
                 setTimeout(() => {
                     resultDiv.innerHTML = '';
                     isProcessing = false;
@@ -201,7 +179,16 @@
         }
 
         startScanBtn.addEventListener('click', () => {
-            initAudio(); // เริ่มต้นเตรียมเสียงเมื่อผู้ใช้กดปุ่ม
+            if (sound) {
+                sound.load();
+                sound.volume = 0.01;
+                sound.play().catch(e => {});
+                setTimeout(() => {
+                    sound.pause();
+                    sound.currentTime = 0;
+                    sound.volume = 1.0;
+                }, 10);
+            }
             
             showScreen(scanScreen);
 
