@@ -15,7 +15,7 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            -webkit-tap-highlight-color: transparent; /* ป้องกันแสงกระพริบตอนกดบน iOS */
+            -webkit-tap-highlight-color: transparent;
         }
 
         .container {
@@ -45,7 +45,7 @@
         .status-message {
             margin-top: 20px;
             font-weight: bold;
-            min-height: 50px; /* จองพื้นที่ไว้ลดการกระโดดของ Layout */
+            min-height: 50px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -78,7 +78,7 @@
         }
         
         button:active {
-            transform: scale(0.98); /* ทำให้ปุ่มดูเหมือนถูกกด */
+            transform: scale(0.98);
         }
 
         button#startScanBtn {
@@ -114,14 +114,13 @@
         </div>
     </div>
 
-    <audio id="scanSound" preload="auto" playsinline>
-        <source src="https://firebasestorage.googleapis.com/v0/b/glide-prod.appspot.com/o/audio%2Fblip.mp3?alt=media&token=869b2323-c27a-422c-a502-12625995b217" type="audio/mpeg">
-    </audio>
+    <!-- ไม่ต้องใช้แท็ก <audio> อีกต่อไป -->
 
     <script src="https://unpkg.com/html5-qrcode/html5-qrcode.min.js"></script>
 
     <script>
         const webAppUrl = 'https://script.google.com/macros/s/AKfycbyxkdYVQFZc9rARHqu2HnscmZM5uXYuqnaKqrF8AH103UCKr9DsvskUg7v6dNPUD30aZQ/exec';
+        const soundUrl = 'https://firebasestorage.googleapis.com/v0/b/glide-prod.appspot.com/o/audio%2Fblip.mp3?alt=media&token=869b2323-c27a-422c-a502-12625995b217';
 
         const mainScreen = document.getElementById('mainScreen');
         const scanScreen = document.getElementById('scanScreen');
@@ -130,10 +129,36 @@
         const resultDiv = document.getElementById('result');
         const errorDiv = document.getElementById('error');
         const qrReaderDivId = "qr-reader";
-        const sound = document.getElementById('scanSound');
 
         let html5QrCode;
         let isProcessing = false;
+
+        // === ส่วนที่แก้ไข: การจัดการเสียงด้วย Web Audio API ===
+        let audioContext;
+        let audioBuffer;
+
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                fetch(soundUrl)
+                    .then(response => response.arrayBuffer())
+                    .then(data => audioContext.decodeAudioData(data))
+                    .then(buffer => {
+                        audioBuffer = buffer;
+                    })
+                    .catch(e => console.error("Error with decoding audio data", e));
+            }
+        }
+
+        function playSound() {
+            if (!audioContext || !audioBuffer) return;
+            const source = audioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(audioContext.destination);
+            source.start(0);
+        }
+        // === สิ้นสุดส่วนแก้ไขเสียง ===
+
 
         async function onScanSuccess(decodedText, decodedResult) {
             if (isProcessing) return;
@@ -141,26 +166,24 @@
             isProcessing = true;
             console.log(`Scan result: ${decodedText}`);
             
-            if (sound) sound.play();
+            playSound(); // เรียกใช้ฟังก์ชันเล่นเสียงใหม่
             
             resultDiv.innerHTML = `✅<br>${decodedText}`;
             
             try {
-                // เราไม่รอให้ fetch เสร็จ แต่จะเริ่มจับเวลาเลย เพื่อให้ UI ตอบสนองเร็วขึ้น
                 fetch(webAppUrl, {
                     method: 'POST',
                     mode: 'no-cors',
                     body: JSON.stringify({ qrData: decodedText })
                 });
 
-                // === ส่วนที่แก้ไข: ลดเวลาหน่วงเหลือ 0.4 วินาที ===
+                // === ส่วนที่แก้ไข: ปรับเวลาหน่วงเป็น 0.8 วินาที ===
                 setTimeout(() => {
                     resultDiv.innerHTML = '';
-                    isProcessing = false; // พร้อมสแกนอันต่อไป
-                }, 400); 
+                    isProcessing = false;
+                }, 800); 
 
             } catch (error) {
-                // การจัดการ error ยังคงเหมือนเดิม
                 errorDiv.innerText = `❌ เกิดข้อผิดพลาดในการส่งข้อมูล`;
                 setTimeout(() => {
                     errorDiv.innerText = '';
@@ -178,11 +201,7 @@
         }
 
         startScanBtn.addEventListener('click', () => {
-            if (sound) {
-                sound.play().catch(e => {});
-                sound.pause();
-                sound.currentTime = 0;
-            }
+            initAudio(); // เริ่มต้นเตรียมเสียงเมื่อผู้ใช้กดปุ่ม
             
             showScreen(scanScreen);
 
